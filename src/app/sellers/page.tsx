@@ -1,11 +1,19 @@
+import SellerGrid from "@/components/seller/SellerGrid";
+
 export default function SellersPage() {
   return (
-    <main style={{ padding: "4rem", textAlign: "center" }}>
-      <h1>Our Sellers</h1>
+    <main className="sellers-page">
+      <section className="sellers-header">
+        <h1>Meet Our Artisans</h1>
 
-      <p>
-        The talented artisans behind our handcrafted collections will soon be presented, stay with us!.
-      </p>
+        <p>
+          Discover talented creators from across Africa,
+          each bringing unique skills, passion, and
+          craftsmanship to Handcrafted Haven.
+        </p>
+      </section>
+
+      <SellerGrid />
     </main>
   );
 }
