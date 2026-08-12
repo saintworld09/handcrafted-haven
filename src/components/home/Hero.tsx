@@ -94,11 +94,7 @@ export default function Hero() {
           width={600}
           height={500}
           priority
-          style={{
-            width: "100%",
-            height: "auto",
-            borderRadius: "15px",
-          }}
+        
         />
       </div>
     </section>
