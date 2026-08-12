@@ -1,39 +1,29 @@
 import EditProductForm from "@/components/products/EditProductForm";
 
 interface EditProductPageProps {
-  params: Promise<{
-    id: string;
-  }>;
+params: Promise<{
+id: string;
+}>;
 }
 
-
 export default async function EditProductPage({
-  params,
+params,
 }: EditProductPageProps) {
+const { id } = await params;
 
-  const { id } = await params;
-
-
-  return (
-    <main className="edit-product-page">
-
-      <section className="edit-product-header">
-
-        <h1>
-          Edit Product
-        </h1>
-
-        <p>
-          Update your handcrafted product information.
-        </p>
-
-      </section>
+return ( <main> <section className="edit-product-header"> <h1>
+Edit Product </h1>
 
 
-      <EditProductForm
-        productId={Number(id)}
-      />
+    <p>
+      Update your handcrafted product information.
+    </p>
+  </section>
 
-    </main>
-  );
+  <EditProductForm
+    productId={id}
+  />
+</main>
+
+);
 }

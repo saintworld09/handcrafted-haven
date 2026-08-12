@@ -5,130 +5,96 @@ import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
-interface RegisteredUser {
-  name: string;
-  email: string;
-  password: string;
-}
+import { useAuth } from "@/context/AuthContext";
 
 export default function LoginForm() {
   const router = useRouter();
+  const { login } = useAuth();
 
   const [email, setEmail] = useState("");
-  const [password, setPassword] =
-    useState("");
-  const [rememberMe, setRememberMe] =
-    useState(false);
-  const [isSubmitting, setIsSubmitting] =
-    useState(false);
+  const [password, setPassword] = useState("");
+  const [rememberMe, setRememberMe] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  function handleSubmit(
+  async function handleSubmit(
     event: FormEvent<HTMLFormElement>
   ) {
     event.preventDefault();
 
-    const trimmedEmail =
-      email.trim().toLowerCase();
+    const trimmedEmail = email.trim().toLowerCase();
 
     if (!trimmedEmail) {
-      toast.error(
-        "Please enter your email address."
-      );
+      toast.error("Please enter your email address.");
       return;
     }
 
     if (!password) {
-      toast.error(
-        "Please enter your password."
-      );
+      toast.error("Please enter your password.");
       return;
     }
 
     setIsSubmitting(true);
 
-    const storedUser =
-      localStorage.getItem(
-        "handcrafted-haven-user"
-      );
-
-    if (!storedUser) {
-      toast.error(
-        "No account was found. Please register first."
-      );
-      setIsSubmitting(false);
-      return;
-    }
-
     try {
-      const user: RegisteredUser =
-        JSON.parse(storedUser);
+      const success = await login(
+        trimmedEmail,
+        password
+      );
 
-      if (
-        user.email !== trimmedEmail ||
-        user.password !== password
-      ) {
-        toast.error(
-          "Invalid email or password."
-        );
-        setIsSubmitting(false);
+      if (!success) {
+        toast.error("Invalid email or password.");
         return;
       }
 
-      const session = {
-        name: user.name,
-        email: user.email,
-        loggedIn: true,
-      };
-
-      if (rememberMe) {
-        localStorage.setItem(
-          "handcrafted-haven-session",
-          JSON.stringify(session)
-        );
-      } else {
-        sessionStorage.setItem(
-          "handcrafted-haven-session",
-          JSON.stringify(session)
-        );
-      }
-
       toast.success(
-        `Welcome back, ${user.name}!`
+        "Login successful! Welcome back."
       );
 
-      setEmail("");
-      setPassword("");
-      setIsSubmitting(false);
+      /*
+       * Get the authenticated user from the
+       * server so we know which dashboard to open.
+       *
+       * We do not use localStorage here because
+       * AuthContext already manages authentication.
+       */
+      const response = await fetch("/api/auth/me", {
+        method: "GET",
+        credentials: "include",
+        cache: "no-store",
+      });
 
-      router.push("/products");
+      const data = await response.json();
+
+      if (data.user?.role === "seller") {
+        router.replace("/dashboard/seller");
+      } else {
+        router.replace("/dashboard/buyer");
+      }
     } catch (error) {
-      console.error(
-        "Failed to read user account:",
-        error
-      );
+      console.error("Login error:", error);
 
       toast.error(
-        "Something went wrong. Please register again."
+        "Something went wrong while logging in. Please try again."
       );
-
+    } finally {
       setIsSubmitting(false);
     }
   }
 
   return (
-    <section className="auth-page">
-      <div className="auth-card">
+    <section className="auth-section">
+      <div className="auth-container">
         <div className="auth-header">
-          <span className="section-label">
+          <p className="auth-brand">
             Handcrafted Haven
-          </span>
+          </p>
 
           <h1>Welcome Back</h1>
 
           <p>
-            Login to your seller account and
-            continue managing your handcrafted
-            products.
+            Login to your Handcrafted Haven
+            account and continue exploring
+            unique handcrafted products.
           </p>
         </div>
 
@@ -213,6 +179,7 @@ export default function LoginForm() {
 
         <p className="auth-footer">
           Do not have an account?{" "}
+
           <Link href="/register">
             Become a Seller
           </Link>

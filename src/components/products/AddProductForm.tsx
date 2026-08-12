@@ -1,268 +1,470 @@
 "use client";
 
-import { useState } from "react";
+import {
+  useState,
+  type ChangeEvent,
+  type FormEvent,
+} from "react";
 import { useRouter } from "next/navigation";
+
 import { useProducts } from "@/context/ProductsContext";
+import { useAuth } from "@/context/AuthContext";
 
 export default function AddProductForm() {
   const router = useRouter();
+
   const { addProduct } = useProducts();
+  const { user } = useAuth();
 
   const [formData, setFormData] = useState({
     name: "",
     category: "",
     price: "",
-    seller: "",
     image: "",
     description: "",
   });
 
+  const [isSubmitting, setIsSubmitting] =
+    useState(false);
+
+  const [error, setError] = useState("");
+
+  /*
+   * -------------------------------------------------
+   * Handle text/select changes
+   * -------------------------------------------------
+   */
 
   function handleChange(
-    e: React.ChangeEvent<
+    e: ChangeEvent<
       HTMLInputElement |
-      HTMLTextAreaElement |
-      HTMLSelectElement
+        HTMLTextAreaElement |
+        HTMLSelectElement
     >
   ) {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
+    const { name, value } = e.target;
+
+    setFormData((current) => ({
+      ...current,
+      [name]: value,
+    }));
   }
 
+  /*
+   * -------------------------------------------------
+   * Handle image selection
+   * -------------------------------------------------
+   */
 
   function handleImageChange(
-    e: React.ChangeEvent<HTMLInputElement>
+    e: ChangeEvent<HTMLInputElement>
   ) {
     const file = e.target.files?.[0];
 
-    if (!file) return;
+    if (!file) {
+      return;
+    }
 
+    /*
+     * Limit image size to 5 MB.
+     */
+    const maxFileSize =
+      5 * 1024 * 1024;
+
+    if (file.size > maxFileSize) {
+      setError(
+        "Image size must be less than 5 MB."
+      );
+
+      e.target.value = "";
+      return;
+    }
+
+    setError("");
 
     const reader = new FileReader();
 
     reader.onloadend = () => {
-      setFormData({
-        ...formData,
-        image: reader.result as string,
-      });
+      setFormData((current) => ({
+        ...current,
+        image:
+          typeof reader.result === "string"
+            ? reader.result
+            : "",
+      }));
     };
 
+    reader.onerror = () => {
+      setError(
+        "Unable to read the selected image."
+      );
+    };
 
     reader.readAsDataURL(file);
   }
 
+  /*
+   * -------------------------------------------------
+   * Submit Product
+   * -------------------------------------------------
+   */
 
-
-  function handleSubmit(
-    e: React.FormEvent<HTMLFormElement>
+  async function handleSubmit(
+    e: FormEvent<HTMLFormElement>
   ) {
     e.preventDefault();
 
+    setError("");
 
-    addProduct({
-      name: formData.name,
-      category: formData.category,
-      price: Number(formData.price),
-      seller: formData.seller,
-      image: formData.image,
-      description: formData.description,
-    });
+    /*
+     * The UI checks the current authenticated user,
+     * but the API performs the real authorization.
+     */
 
+    if (!user) {
+      setError(
+        "You must be logged in as a seller."
+      );
+      return;
+    }
 
-    router.push("/products");
+    if (user.role !== "seller") {
+      setError(
+        "Only seller accounts can add products."
+      );
+      return;
+    }
+
+    /*
+     * Validate required fields.
+     */
+
+    const productName =
+      formData.name.trim();
+
+    const description =
+      formData.description.trim();
+
+    const category =
+      formData.category.trim();
+
+    const numericPrice = Number(
+      formData.price
+    );
+
+    if (!productName) {
+      setError(
+        "Please enter a product name."
+      );
+      return;
+    }
+
+    if (!category) {
+      setError(
+        "Please select a category."
+      );
+      return;
+    }
+
+    if (!formData.price) {
+      setError(
+        "Please enter a product price."
+      );
+      return;
+    }
+
+    if (
+      Number.isNaN(numericPrice) ||
+      numericPrice < 0
+    ) {
+      setError(
+        "Please enter a valid product price."
+      );
+      return;
+    }
+
+    if (!formData.image) {
+      setError(
+        "Please select a product image."
+      );
+      return;
+    }
+
+    if (!description) {
+      setError(
+        "Please enter a product description."
+      );
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      /*
+       * IMPORTANT:
+       *
+       * Do not send seller or sellerId here.
+       *
+       * The API gets the authenticated seller
+       * from the HTTP-only session cookie.
+       */
+
+      await addProduct({
+        name: productName,
+        category,
+        price: numericPrice,
+        image: formData.image,
+        description,
+        seller: "",
+        sellerId: "",
+      });
+
+      /*
+       * Product was successfully created.
+       */
+
+      router.push("/products");
+      router.refresh();
+    } catch (error) {
+      console.error(
+        "Failed to add product:",
+        error
+      );
+
+      setError(
+        error instanceof Error
+          ? error.message
+          : "Failed to add product. Please try again."
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
-
-
-  return (
-    <section className="add-product-form-section">
-
-      <form
-        className="add-product-form"
-        onSubmit={handleSubmit}
-      >
-
-
-        <div className="form-group">
-
-          <label>
-            Product Name
-          </label>
-
-          <input
-            type="text"
-            name="name"
-            placeholder="Enter product name"
-            value={formData.name}
-            onChange={handleChange}
-            required
-          />
-
-        </div>
-
-
-
-        <div className="form-group">
-
-          <label>
-            Category
-          </label>
-
-
-          <select
-            name="category"
-            value={formData.category}
-            onChange={handleChange}
-            required
-          >
-
-            <option value="">
-              Select Category
-            </option>
-
-            <option value="Pottery">
-              Pottery
-            </option>
-
-            <option value="Home Décor">
-              Home Décor
-            </option>
-
-            <option value="Woodwork">
-              Woodwork
-            </option>
-
-            <option value="Candles">
-              Candles
-            </option>
-
-            <option value="Jewelry">
-              Jewelry
-            </option>
-
-            <option value="Artwork">
-              Artwork
-            </option>
-
-          </select>
-
-        </div>
-
-
-
-
-        <div className="form-group">
-
-          <label>
-            Price ($)
-          </label>
-
-
-          <input
-            type="number"
-            name="price"
-            placeholder="Enter price"
-            value={formData.price}
-            onChange={handleChange}
-            required
-          />
-
-        </div>
-
-
-
-
-        <div className="form-group">
-
-          <label>
-            Seller Name
-          </label>
-
-
-          <input
-            type="text"
-            name="seller"
-            placeholder="Enter seller name"
-            value={formData.seller}
-            onChange={handleChange}
-            required
-          />
-
-        </div>
-
-
-
-
-        {/* IMAGE UPLOAD */}
-
-        <div className="form-group">
-
-          <label>
-            Product Image
-          </label>
-
-
-          <input
-            type="file"
-            accept="image/*"
-            onChange={handleImageChange}
-            required
-          />
-
-
-
-          {formData.image && (
-            <div className="image-preview">
-
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={formData.image}
-                alt="Product Preview"
-              />
-
-            </div>
-          )}
-
-        </div>
-
-
-
-
-
-        <div className="form-group">
-
-          <label>
-            Description
-          </label>
-
-
-          <textarea
-            name="description"
-            rows={5}
-            placeholder="Describe your handcrafted product..."
-            value={formData.description}
-            onChange={handleChange}
-            required
-          />
-
-        </div>
-
-
-
-
+  /*
+   * -------------------------------------------------
+   * No authenticated user
+   * -------------------------------------------------
+   */
+
+  if (!user) {
+    return (
+      <section className="auth-required">
+        <h2>Seller Login Required</h2>
+
+        <p>
+          You must sign in as a seller
+          before you can add a product.
+        </p>
 
         <button
-          type="submit"
-          className="submit-product-btn"
+          type="button"
+          className="primary-btn"
+          onClick={() =>
+            router.push("/login")
+          }
         >
-          Add Product
+          Login
         </button>
+      </section>
+    );
+  }
 
+  /*
+   * -------------------------------------------------
+   * Buyer attempting to add a product
+   * -------------------------------------------------
+   */
 
-      </form>
+  if (user.role !== "seller") {
+    return (
+      <section className="auth-required">
+        <h2>Seller Account Required</h2>
 
-    </section>
+        <p>
+          Only seller accounts can add
+          handcrafted products.
+        </p>
+
+        <button
+          type="button"
+          className="primary-btn"
+          onClick={() =>
+            router.push(
+              "/dashboard/buyer"
+            )
+          }
+        >
+          Go to Buyer Dashboard
+        </button>
+      </section>
+    );
+  }
+
+  /*
+   * -------------------------------------------------
+   * Seller Product Form
+   * -------------------------------------------------
+   */
+
+  return (
+    <form
+      onSubmit={handleSubmit}
+      className="product-form"
+    >
+      <div className="form-group">
+        <label htmlFor="seller">
+          Seller
+        </label>
+
+        <input
+          id="seller"
+          type="text"
+          value={user.name}
+          readOnly
+          disabled
+        />
+      </div>
+
+      <div className="form-group">
+        <label htmlFor="name">
+          Product Name
+        </label>
+
+        <input
+          id="name"
+          type="text"
+          name="name"
+          placeholder="Enter product name"
+          value={formData.name}
+          onChange={handleChange}
+          required
+          disabled={isSubmitting}
+        />
+      </div>
+
+      <div className="form-group">
+        <label htmlFor="category">
+          Category
+        </label>
+
+        <select
+          id="category"
+          name="category"
+          value={formData.category}
+          onChange={handleChange}
+          required
+          disabled={isSubmitting}
+        >
+          <option value="">
+            Select Category
+          </option>
+
+          <option value="Pottery">
+            Pottery
+          </option>
+
+          <option value="Home Décor">
+            Home Décor
+          </option>
+
+          <option value="Woodwork">
+            Woodwork
+          </option>
+
+          <option value="Candles">
+            Candles
+          </option>
+
+          <option value="Jewelry">
+            Jewelry
+          </option>
+
+          <option value="Artwork">
+            Artwork
+          </option>
+        </select>
+      </div>
+
+      <div className="form-group">
+        <label htmlFor="price">
+          Price ($)
+        </label>
+
+        <input
+          id="price"
+          type="number"
+          name="price"
+          placeholder="Enter price"
+          value={formData.price}
+          onChange={handleChange}
+          min="0"
+          step="0.01"
+          required
+          disabled={isSubmitting}
+        />
+      </div>
+
+      <div className="form-group">
+        <label htmlFor="image">
+          Product Image
+        </label>
+
+        <input
+          id="image"
+          type="file"
+          accept="image/*"
+          onChange={handleImageChange}
+          required
+          disabled={isSubmitting}
+        />
+
+        {formData.image && (
+          <div className="image-preview">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={formData.image}
+              alt="Product Preview"
+            />
+          </div>
+        )}
+      </div>
+
+      <div className="form-group">
+        <label htmlFor="description">
+          Description
+        </label>
+
+        <textarea
+          id="description"
+          name="description"
+          rows={5}
+          placeholder="Describe your handcrafted product..."
+          value={formData.description}
+          onChange={handleChange}
+          required
+          disabled={isSubmitting}
+        />
+      </div>
+
+      {error && (
+        <p
+          className="auth-error"
+          role="alert"
+        >
+          {error}
+        </p>
+      )}
+
+      <button
+        type="submit"
+        className="submit-product-btn"
+        disabled={isSubmitting}
+      >
+        {isSubmitting
+          ? "Adding Product..."
+          : "Add Product"}
+      </button>
+    </form>
   );
 }

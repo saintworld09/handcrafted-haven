@@ -9,8 +9,10 @@ import {
   useSyncExternalStore,
 } from "react";
 
+import { useAuth } from "@/context/AuthContext";
+
 export interface CartItem {
-  id: number;
+  id: string;
   name: string;
   price: number;
   image: string;
@@ -20,94 +22,185 @@ export interface CartItem {
 
 interface CartContextType {
   cart: CartItem[];
-  addToCart: (product: Omit<CartItem, "quantity">) => void;
-  removeFromCart: (id: number) => void;
-  increaseQuantity: (id: number) => void;
-  decreaseQuantity: (id: number) => void;
+  addToCart: (
+    product: Omit<CartItem, "quantity">
+  ) => void;
+  removeFromCart: (id: string) => void;
+  increaseQuantity: (id: string) => void;
+  decreaseQuantity: (id: string) => void;
   clearCart: () => void;
   cartCount: number;
   cartTotal: number;
 }
 
-const CartContext = createContext<CartContextType | undefined>(
-  undefined
-);
+const CartContext =
+  createContext<CartContextType | undefined>(
+    undefined
+  );
 
-const STORAGE_KEY = "cart";
 const CART_EVENT = "cart-change";
 
+const GUEST_CART_KEY = "handcrafted-haven-guest-cart";
+
 /*
- * ------------------------------------------------------------------
- * Cart store
- * ------------------------------------------------------------------
+ * -------------------------------------------------
+ * Cart Store
+ * -------------------------------------------------
  *
- * We keep the current cart in memory.
+ * Authentication is NOT stored here.
  *
- * IMPORTANT:
- * The initial value must be the same during server rendering
- * and the first client render. This prevents hydration errors.
+ * AuthContext gets the authenticated user from
+ * the HTTP-only authentication session.
+ *
+ * We only use the authenticated user's database
+ * ID to give each buyer their own cart.
+ * -------------------------------------------------
  */
+
+let activeUserId: string | null = null;
 
 let cartSnapshot: CartItem[] = [];
 
 const listeners = new Set<() => void>();
 
-function notifyCartChange() {
-  listeners.forEach((listener) => {
-    listener();
-  });
+/*
+ * -------------------------------------------------
+ * Storage Key
+ * -------------------------------------------------
+ */
+
+function getCartStorageKey(
+  userId: string | null
+): string {
+  if (!userId) {
+    return GUEST_CART_KEY;
+  }
+
+  return `handcrafted-haven-cart-${userId}`;
 }
 
 /*
- * Read the cart from localStorage.
+ * -------------------------------------------------
+ * Cart Item Validation
+ * -------------------------------------------------
  */
-function loadCartFromStorage(): CartItem[] {
-  if (typeof window === "undefined") {
+
+function isCartItem(
+  value: unknown
+): value is CartItem {
+  if (
+    typeof value !== "object" ||
+    value === null
+  ) {
+    return false;
+  }
+
+  const item =
+    value as Record<string, unknown>;
+
+  return (
+    typeof item.id === "string" &&
+    typeof item.name === "string" &&
+    typeof item.price === "number" &&
+    Number.isFinite(item.price) &&
+    typeof item.image === "string" &&
+    typeof item.seller === "string" &&
+    typeof item.quantity === "number" &&
+    Number.isInteger(item.quantity) &&
+    item.quantity > 0
+  );
+}
+
+/*
+ * -------------------------------------------------
+ * Load Cart
+ * -------------------------------------------------
+ */
+
+function loadCartFromStorage(
+  userId: string | null
+): CartItem[] {
+  if (
+    typeof window === "undefined"
+  ) {
+    return [];
+  }
+
+  /*
+   * Visitors and sellers should never have
+   * an active shopping cart.
+   */
+
+  if (!userId) {
     return [];
   }
 
   try {
-    const storedCart = window.localStorage.getItem(STORAGE_KEY);
+    const storageKey =
+      getCartStorageKey(userId);
+
+    const storedCart =
+      window.localStorage.getItem(
+        storageKey
+      );
 
     if (!storedCart) {
       return [];
     }
 
-    const parsedCart: unknown = JSON.parse(storedCart);
+    const parsedCart: unknown =
+      JSON.parse(storedCart);
 
     if (!Array.isArray(parsedCart)) {
       return [];
     }
 
-    return parsedCart as CartItem[];
+    return parsedCart.filter(isCartItem);
   } catch (error) {
-    console.error("Failed to load cart from localStorage:", error);
+    console.error(
+      "Failed to load cart:",
+      error
+    );
+
     return [];
   }
 }
 
 /*
- * Get the current cart snapshot.
- *
- * React uses this function with useSyncExternalStore.
+ * -------------------------------------------------
+ * Get Cart Snapshot
+ * -------------------------------------------------
  */
+
 function getCartSnapshot(): CartItem[] {
   return cartSnapshot;
 }
 
 /*
- * Server snapshot.
+ * -------------------------------------------------
+ * Server Snapshot
+ * -------------------------------------------------
  *
- * This MUST remain stable and match the initial client snapshot.
+ * Always empty during server rendering.
+ * This prevents hydration problems.
+ * -------------------------------------------------
  */
+
+const EMPTY_CART: CartItem[] = [];
+
 function getServerCartSnapshot(): CartItem[] {
-  return cartSnapshot;
+  return EMPTY_CART;
 }
 
 /*
- * Subscribe React to cart changes.
+ * -------------------------------------------------
+ * Subscribe
+ * -------------------------------------------------
  */
-function subscribeToCart(listener: () => void) {
+
+function subscribeToCart(
+  listener: () => void
+) {
   listeners.add(listener);
 
   return () => {
@@ -116,54 +209,147 @@ function subscribeToCart(listener: () => void) {
 }
 
 /*
- * Update the in-memory cart and localStorage.
+ * -------------------------------------------------
+ * Notify Listeners
+ * -------------------------------------------------
  */
-function updateCart(newCart: CartItem[]) {
+
+function notifyCartChange() {
+  listeners.forEach((listener) => {
+    listener();
+  });
+}
+
+/*
+ * -------------------------------------------------
+ * Update Cart
+ * -------------------------------------------------
+ */
+
+function updateCart(
+  newCart: CartItem[]
+) {
   cartSnapshot = newCart;
 
-  if (typeof window !== "undefined") {
+  /*
+   * Never save a cart for a visitor.
+   */
+
+  if (
+    typeof window !== "undefined" &&
+    activeUserId
+  ) {
     try {
+      const storageKey =
+        getCartStorageKey(
+          activeUserId
+        );
+
       window.localStorage.setItem(
-        STORAGE_KEY,
+        storageKey,
         JSON.stringify(newCart)
+      );
+
+      window.dispatchEvent(
+        new Event(CART_EVENT)
       );
     } catch (error) {
       console.error(
-        "Failed to save cart to localStorage:",
+        "Failed to save cart:",
         error
       );
     }
-
-    window.dispatchEvent(new Event(CART_EVENT));
   }
 
   notifyCartChange();
 }
 
 /*
- * Listen for changes coming from another browser tab/window.
+ * -------------------------------------------------
+ * Change Active User
+ * -------------------------------------------------
+ *
+ * Called when the authenticated user changes.
+ *
+ * This is the key part that prevents one buyer's
+ * cart from appearing for another buyer.
+ * -------------------------------------------------
  */
-function handleStorageChange(event: StorageEvent) {
-  if (event.key !== STORAGE_KEY) {
+
+function switchCartUser(
+  userId: string | null
+) {
+  activeUserId = userId;
+
+  /*
+   * Only buyers should have a cart.
+   *
+   * AuthContext gives us the user ID, but the role
+   * is handled by the provider below.
+   */
+
+  cartSnapshot =
+    loadCartFromStorage(userId);
+
+  notifyCartChange();
+}
+
+/*
+ * -------------------------------------------------
+ * Storage Event
+ * -------------------------------------------------
+ *
+ * Handles changes from another browser tab.
+ * -------------------------------------------------
+ */
+
+function handleStorageChange(
+  event: StorageEvent
+) {
+  if (!activeUserId) {
     return;
   }
 
-  cartSnapshot = loadCartFromStorage();
+  const expectedKey =
+    getCartStorageKey(
+      activeUserId
+    );
+
+  if (event.key !== expectedKey) {
+    return;
+  }
+
+  cartSnapshot =
+    loadCartFromStorage(
+      activeUserId
+    );
+
   notifyCartChange();
 }
 
 /*
- * Listen for cart changes made inside this application.
+ * -------------------------------------------------
+ * Application Cart Event
+ * -------------------------------------------------
  */
+
 function handleCartChange() {
-  cartSnapshot = loadCartFromStorage();
+  if (!activeUserId) {
+    return;
+  }
+
+  cartSnapshot =
+    loadCartFromStorage(
+      activeUserId
+    );
+
   notifyCartChange();
 }
 
 /*
- * ------------------------------------------------------------------
+ * -------------------------------------------------
  * Cart Provider
- * ------------------------------------------------------------------
+ * -------------------------------------------------
  */
 
 export function CartProvider({
@@ -171,22 +357,46 @@ export function CartProvider({
 }: {
   children: ReactNode;
 }) {
-  const cart = useSyncExternalStore(
-    subscribeToCart,
-    getCartSnapshot,
-    getServerCartSnapshot
-  );
+  const { user } = useAuth();
 
   /*
-   * Load localStorage AFTER the initial render/hydration.
-   *
-   * We are not calling React setState here.
-   * We are synchronizing the external cart store instead.
+   * Only buyers receive a shopping cart.
    */
-  useEffect(() => {
-    cartSnapshot = loadCartFromStorage();
 
-    notifyCartChange();
+  const buyerId =
+    user?.role === "buyer"
+      ? user.id
+      : null;
+
+  const cart =
+    useSyncExternalStore(
+      subscribeToCart,
+      getCartSnapshot,
+      getServerCartSnapshot
+    );
+
+  /*
+   * Synchronize the external cart store whenever
+   * the authenticated buyer changes.
+   *
+   * This is NOT authentication state.
+   * Authentication continues to come from AuthContext.
+   */
+
+  useEffect(() => {
+    switchCartUser(buyerId);
+  }, [buyerId]);
+
+  /*
+   * Register browser event listeners.
+   */
+
+  useEffect(() => {
+    if (
+      typeof window === "undefined"
+    ) {
+      return;
+    }
 
     window.addEventListener(
       "storage",
@@ -212,16 +422,48 @@ export function CartProvider({
   }, []);
 
   /*
-   * Add a product to the cart.
+   * -------------------------------------------------
+   * Add Product
+   * -------------------------------------------------
    */
+
   function addToCart(
     product: Omit<CartItem, "quantity">
   ) {
-    const currentCart = getCartSnapshot();
+    /*
+     * Only authenticated buyers can add
+     * products to the cart.
+     */
 
-    const existingItem = currentCart.find(
-      (item) => item.id === product.id
-    );
+    if (!user) {
+      throw new Error(
+        "Please log in as a buyer to add products to your cart."
+      );
+    }
+
+    if (user.role !== "buyer") {
+      throw new Error(
+        "Only buyer accounts can add products to the cart."
+      );
+    }
+
+    /*
+     * Make sure the cart belongs to the
+     * authenticated buyer.
+     */
+
+    if (activeUserId !== user.id) {
+      switchCartUser(user.id);
+    }
+
+    const currentCart =
+      getCartSnapshot();
+
+    const existingItem =
+      currentCart.find(
+        (item) =>
+          item.id === product.id
+      );
 
     if (existingItem) {
       updateCart(
@@ -229,7 +471,8 @@ export function CartProvider({
           item.id === product.id
             ? {
                 ...item,
-                quantity: item.quantity + 1,
+                quantity:
+                  item.quantity + 1,
               }
             : item
         )
@@ -248,30 +491,52 @@ export function CartProvider({
   }
 
   /*
-   * Remove an item completely.
+   * -------------------------------------------------
+   * Remove Product
+   * -------------------------------------------------
    */
-  function removeFromCart(id: number) {
-    const currentCart = getCartSnapshot();
+
+  function removeFromCart(
+    id: string
+  ) {
+    if (!buyerId) {
+      return;
+    }
+
+    const currentCart =
+      getCartSnapshot();
 
     updateCart(
       currentCart.filter(
-        (item) => item.id !== id
+        (item) =>
+          item.id !== id
       )
     );
   }
 
   /*
-   * Increase quantity by one.
+   * -------------------------------------------------
+   * Increase Quantity
+   * -------------------------------------------------
    */
-  function increaseQuantity(id: number) {
-    const currentCart = getCartSnapshot();
+
+  function increaseQuantity(
+    id: string
+  ) {
+    if (!buyerId) {
+      return;
+    }
+
+    const currentCart =
+      getCartSnapshot();
 
     updateCart(
       currentCart.map((item) =>
         item.id === id
           ? {
               ...item,
-              quantity: item.quantity + 1,
+              quantity:
+                item.quantity + 1,
             }
           : item
       )
@@ -279,12 +544,20 @@ export function CartProvider({
   }
 
   /*
-   * Decrease quantity by one.
-   *
-   * If quantity reaches zero, remove the item.
+   * -------------------------------------------------
+   * Decrease Quantity
+   * -------------------------------------------------
    */
-  function decreaseQuantity(id: number) {
-    const currentCart = getCartSnapshot();
+
+  function decreaseQuantity(
+    id: string
+  ) {
+    if (!buyerId) {
+      return;
+    }
+
+    const currentCart =
+      getCartSnapshot();
 
     updateCart(
       currentCart
@@ -292,26 +565,38 @@ export function CartProvider({
           item.id === id
             ? {
                 ...item,
-                quantity: item.quantity - 1,
+                quantity:
+                  item.quantity - 1,
               }
             : item
         )
         .filter(
-          (item) => item.quantity > 0
+          (item) =>
+            item.quantity > 0
         )
     );
   }
 
   /*
-   * Empty the entire cart.
+   * -------------------------------------------------
+   * Clear Cart
+   * -------------------------------------------------
    */
+
   function clearCart() {
+    if (!buyerId) {
+      return;
+    }
+
     updateCart([]);
   }
 
   /*
-   * Total number of products in the cart.
+   * -------------------------------------------------
+   * Cart Count
+   * -------------------------------------------------
    */
+
   const cartCount = useMemo(() => {
     return cart.reduce(
       (total, item) =>
@@ -321,13 +606,17 @@ export function CartProvider({
   }, [cart]);
 
   /*
-   * Total price of everything in the cart.
+   * -------------------------------------------------
+   * Cart Total
+   * -------------------------------------------------
    */
+
   const cartTotal = useMemo(() => {
     return cart.reduce(
       (total, item) =>
         total +
-        item.price * item.quantity,
+        item.price *
+          item.quantity,
       0
     );
   }, [cart]);
@@ -351,13 +640,14 @@ export function CartProvider({
 }
 
 /*
- * ------------------------------------------------------------------
+ * -------------------------------------------------
  * useCart Hook
- * ------------------------------------------------------------------
+ * -------------------------------------------------
  */
 
 export function useCart() {
-  const context = useContext(CartContext);
+  const context =
+    useContext(CartContext);
 
   if (!context) {
     throw new Error(

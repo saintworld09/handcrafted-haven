@@ -2,12 +2,12 @@ import { Product } from "@/types/product";
 
 export const products: Product[] = [
   {
-    id: 1,
+    id: "1",
     name: "Handmade Clay Vase",
     category: "Pottery",
     price: 45,
     seller: "Emma Crafts",
-    sellerId: 1,
+    sellerId: "1",
     image: "/images/products/pottery.png",
     description:
       "A handcrafted ceramic vase perfect for home decoration.",
@@ -15,12 +15,12 @@ export const products: Product[] = [
     reviewCount: 12,
   },
   {
-    id: 2,
+    id: "2",
     name: "Woven Storage Basket",
     category: "Home Décor",
     price: 38,
     seller: "Nature Weaves",
-    sellerId: 2,
+    sellerId: "2",
     image: "/images/products/baskets.jfif",
     description:
       "Beautiful woven basket made from sustainable natural fibers.",
@@ -28,12 +28,12 @@ export const products: Product[] = [
     reviewCount: 18,
   },
   {
-    id: 3,
+    id: "3",
     name: "Wooden Wall Clock",
     category: "Woodwork",
     price: 60,
     seller: "Oak Studio",
-    sellerId: 3,
+    sellerId: "3",
     image: "/images/products/wall_clock.jfif",
     description:
       "Elegant handcrafted wooden clock for modern homes.",
@@ -41,12 +41,12 @@ export const products: Product[] = [
     reviewCount: 27,
   },
   {
-    id: 4,
+    id: "4",
     name: "Soy Wax Candle",
     category: "Candles",
     price: 25,
     seller: "Glow Creations",
-    sellerId: 4,
+    sellerId: "4",
     image: "/images/products/candle.jfif",
     description:
       "Hand-poured scented soy candle with a relaxing fragrance.",
@@ -54,12 +54,12 @@ export const products: Product[] = [
     reviewCount: 9,
   },
   {
-    id: 5,
+    id: "5",
     name: "Handmade Necklace",
     category: "Jewelry",
     price: 55,
     seller: "Bella Jewelry",
-    sellerId: 5,
+    sellerId: "5",
     image: "/images/products/jewelry.jfif",
     description:
       "A unique handcrafted necklace made with natural stones.",
@@ -67,12 +67,12 @@ export const products: Product[] = [
     reviewCount: 9,
   },
   {
-    id: 6,
+    id: "6",
     name: "Canvas Wall Art",
     category: "Artwork",
     price: 80,
     seller: "Creative Canvas",
-    sellerId: 6,
+    sellerId: "6",
     image: "/images/products/wood-art.jpg",
     description:
       "Original handcrafted artwork to brighten your living space.",

@@ -1,10 +1,6 @@
 export interface Seller {
-  id: number;
+  id: string;
   name: string;
-  specialty: string;
-  location: string;
-  bio: string;
   email: string;
-  image: string;
-  phone: string;
+  role: "seller";
 }

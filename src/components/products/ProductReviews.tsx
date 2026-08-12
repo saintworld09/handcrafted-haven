@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState } from "react";
@@ -5,7 +6,7 @@ import { reviews as initialReviews } from "@/data/reviews";
 import { Review } from "@/types/review";
 
 interface ProductReviewsProps {
-  productId: number;
+  productId: string;
 }
 
 export default function ProductReviews({
@@ -106,7 +107,9 @@ export default function ProductReviews({
 
         <form onSubmit={handleSubmit}>
           <div className="review-form-group">
-            <label htmlFor={`review-author-${productId}`}>
+            <label
+              htmlFor={`review-author-${productId}`}
+            >
               Your Name
             </label>
 
@@ -123,7 +126,9 @@ export default function ProductReviews({
           </div>
 
           <div className="review-form-group">
-            <label htmlFor={`review-rating-${productId}`}>
+            <label
+              htmlFor={`review-rating-${productId}`}
+            >
               Rating
             </label>
 
@@ -159,7 +164,9 @@ export default function ProductReviews({
           </div>
 
           <div className="review-form-group">
-            <label htmlFor={`review-comment-${productId}`}>
+            <label
+              htmlFor={`review-comment-${productId}`}
+            >
               Your Review
             </label>
 
