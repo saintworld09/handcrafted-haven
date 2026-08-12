@@ -89,7 +89,7 @@ export default function Hero() {
 
       <div className="hero-image">
         <Image
-          src="/images/hero/artisan-hero.jfif"
+          src="/images/hero/artisan-hero.png"
           alt="Artisan crafting handmade pottery"
           width={600}
           height={500}
